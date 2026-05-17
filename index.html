@@ -1,0 +1,2162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Missing Migrants Grid Visualization</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inconsolata:wght@300;400;700&family=IBM+Plex+Mono:ital,wght@0,300;1,300&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <style>
+        body {
+            font-family: 'Inconsolata', Monaco, monospace;
+            margin: 5px 20px 20px 20px;
+            background-color: #ffffffd4;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* INTRO / NARRATIVE  */
+        #intro-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: #fff;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 0 15%;
+            box-sizing: border-box;
+            transition: opacity 0.8s ease;
+        }
+        #intro-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        #intro-title {
+            font-family: 'Inconsolata', Monaco, monospace;
+            font-size: 48px;
+            font-weight: 400;
+            margin-bottom: 80px;
+            letter-spacing: 0.5px;
+        }
+        #intro-options {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            position: absolute;
+            right: 15%;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        .intro-option {
+            font-family: 'Inconsolata', Monaco, monospace;
+            font-size: 14px;
+            font-weight: 400;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #000;
+        }
+        .intro-option:hover {
+            opacity: 0.6;
+        }
+        .intro-option .indicator {
+            display: inline-block;
+            width: 8px;
+            height: 15px;
+            background: transparent;
+            flex-shrink: 0;
+            transition: background 0.15s ease;
+        }
+        .intro-option.selected .indicator {
+            background: #000;
+            animation: blink 0.8s step-end infinite;
+        }
+
+        /* === NEXT PROMPT === */
+        #narrative-next {
+            position: absolute;
+            right: 15%;
+            bottom: 38%;
+            font-family: 'Inconsolata', Monaco, monospace;
+            font-size: 14px;
+            font-weight: 400;
+            color: #000;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            text-decoration: underline;
+            text-underline-offset: 3px;
+        }
+        #narrative-next.show {
+            opacity: 1;
+        }
+
+        /*  NARRATIVE SCREEN  */
+        #narrative-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: #fff;
+            z-index: 9998;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 0 15%;
+            box-sizing: border-box;
+            transition: opacity 0.8s ease;
+        }
+        #narrative-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        #narrative-text {
+            font-family: 'Inconsolata', Monaco, monospace;
+            font-size: 15px;
+            font-weight: 400;
+            line-height: 1.8;
+            max-width: 700px;
+            color: #000;
+            text-align: justify;
+            position: relative;
+            z-index: 1;
+        }
+        #narrative-particles {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            pointer-events: none;
+            z-index: 10000;
+        }
+        .narrative-square {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            opacity: 0;
+            transition: opacity 3s ease;
+        }
+        .narrative-square.visible {
+            opacity: 0.85;
+        }
+        .typewriter-text .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 15px;
+            background: #000;
+            margin-left: 2px;
+            vertical-align: text-bottom;
+            animation: blink 0.8s step-end infinite;
+        }
+        @keyframes blink {
+            50% { opacity: 0; }
+        }
+
+        /*LEGEND SCREEN */
+        #legend-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: #fff;
+            z-index: 9997;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.8s ease;
+        }
+        #legend-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        #legend-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #legend-text {
+            font-family: 'Inconsolata', Monaco, monospace;
+            font-size: 15px;
+            font-weight: 400;
+            line-height: 1.8;
+            color: #000;
+            text-align: center;
+        }
+        .legend-inline-square {
+            width: 14px;
+            height: 14px;
+            border: 1px solid #000;
+            background: #fff;
+            display: inline-block;
+            margin: 0 6px;
+            vertical-align: text-bottom;
+        }
+        #legend-next {
+            position: absolute;
+            right: 15%;
+            bottom: 38%;
+            font-family: 'Inconsolata', Monaco, monospace;
+            font-size: 14px;
+            font-weight: 400;
+            color: #000;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            text-decoration: underline;
+            text-underline-offset: 3px;
+        }
+        #legend-next.show {
+            opacity: 1;
+        }
+
+        /* FADE IN */
+        #chart-container, #left-header, #sidebar-trend, #sidebar-origin {
+            opacity: 0;
+            transition: opacity 1s ease;
+        }
+        #chart-container.visible, #left-header.visible, #sidebar-trend.visible, #sidebar-origin.visible {
+            opacity: 1;
+        }
+        #chart-container {
+            margin-top: 30px;
+            margin-left: 420px;
+            align-self: flex-start;
+        }
+        #sidebar-trend, #sidebar-origin {
+            position: fixed;
+            left: 30px;
+            z-index: 500;
+            width: 380px;
+            background: rgba(255,255,255,0.95);
+            padding: 5px 16px;
+            box-sizing: border-box;
+         /* box-shadow: 0 2px 12px rgba(0,0,0,0.08); */
+        }
+        #left-header {
+            position: fixed;
+            top: 50px;
+            left: 30px;
+            z-index: 500;
+            width: 380px;
+            padding: 0 16px;
+            box-sizing: border-box;
+        }
+        #left-header h1 {
+            font-size: 30px;
+            font-weight: 400;
+            font-family: 'Inconsolata', Monaco, monospace;
+            margin: 0 0 20px 0;
+        }
+        #left-header p {
+            font-size: 12px;
+            line-height: 1.2;
+            color: #666;
+            font-family: 'Inconsolata', Monaco, monospace;
+            font-weight: 400;
+
+            text-align: justify;
+            margin: 0;
+        }
+        #migrant-legend {
+            font-family: 'Inconsolata', Monaco, monospace;
+            font-size: 12px;
+            font-weight: 400;
+            color: #000;
+            margin-top: 18px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        #migrant-legend .legend-square {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border: 1px solid #000;
+            background: #fff;
+        }
+        #sidebar-trend {
+            top: 290px;
+            border-top: 0.5px solid #ddd;
+            border-bottom: 0.5px solid #ddd;
+            padding-top: 15px;
+            padding-bottom: 15px;
+        }
+        #sidebar-origin {
+            top: 465px;
+            max-height: calc(100vh - 425px);
+            overflow-y: auto;
+            background: #fff;
+        }
+        #sidebar-origin.popup-visible {
+            z-index: 2501;
+            width: 260px;
+            pointer-events: none;
+        }
+        #sidebar-origin.popup-visible #reset-selection {
+            display: none;
+        }
+        .continent-group {
+            display: flex;
+            align-items: stretch;
+            margin-top: 18px;
+        }
+        .continent-group:first-child {
+            margin-top: 10px;
+        }
+        .continent-label {
+            font-size: 13px;
+            font-family: 'Inconsolata', Monaco, monospace;
+            font-weight: 400;
+            cursor: pointer;
+            user-select: none;
+            min-width: 58px;
+            display: flex;
+            align-items: center;
+            padding-right: 0px;
+        }
+        .continent-label:hover {
+            opacity: 0.6;
+        }
+        .continent-connector {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 15px;
+            position: relative;
+        }
+        .continent-connector::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 8px;
+            bottom: 8px;
+            width: 1px;
+            background-color: #FFFFFF;
+        }
+        .continent-countries {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            padding-left: 8px;
+        }
+        .sidebar-legend-title {
+            font-size: 14px;
+            font-family: 'Inconsolata', Monaco, monospace;
+            font-weight: 400;
+            text-decoration: underline;
+            margin-bottom: 10px;
+        }
+        .sidebar-legend-subtitle {
+            font-size: 12px;
+            font-family: 'Inconsolata', Monaco, monospace;
+            color: #666;
+            margin-bottom: 20px;
+        }
+        .sidebar-country-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 0;
+            cursor: pointer;
+            font-size: 13px;
+            font-family: 'Inconsolata', Monaco, monospace;
+            user-select: none;
+        }
+        .sidebar-country-row:hover {
+            opacity: 0.7;
+        }
+        .sidebar-color-box {
+            width: 14px;
+            height: 14px;
+            flex-shrink: 0;
+        }
+        .sidebar-note {
+            font-size: 10px;
+            font-style: italic;
+            font-family: 'Inconsolata', Monaco, monospace;
+            color: #666;
+            margin-top: 14px;
+        }
+        #reset-selection {
+            font-family: 'Inconsolata', Monaco, monospace;
+            font-size: 13px;
+            font-weight: 400;
+            color: #000;
+            background: #fff;
+            border: 1.5px solid #000;
+            padding: 6px 16px;
+            cursor: pointer;
+            margin-top: 30px;
+            display: block;
+        }
+        #reset-selection:hover {
+            background: #000;
+            color: #fff;
+        }
+        #tooltip {
+            position: absolute;
+            padding: 10px;
+            background: white;
+            border: 0.5px solid #333;
+            /* border-radius: 5px; */
+            pointer-events: none;
+            opacity: 0;
+            font-size: 12px;
+            font-family: 'Inconsolata', Monaco, monospace;
+            z-index: 1000;
+            max-width: 300px;
+        }
+        #popup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+        #popup-container {
+            background: white;
+            /*border-radius: 10px;*/
+            padding: 20px;
+            max-width: 900px;
+            max-height: 85vh;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        #popup-close {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+            z-index: 10;
+        }
+        #popup-close:hover {
+            color: #333;
+        }
+        #popup-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 5px;
+            padding-right: 30px;
+        }
+        #popup-subtitle {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        #popup-controls {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        #popup-controls span {
+            font-size: 12px;
+            color: #666;
+        }
+        .toggle-btn {
+            padding: 6px 14px;
+            border: 1px solid #ccc;
+            background: #f5f5f5;
+            /*border-radius: 4px;*/
+            cursor: pointer;
+            font-size: 12px;
+            font-family: 'Inconsolata', Monaco, monospace;
+            transition: all 0.2s;
+        }
+        .toggle-btn:hover {
+            background: #e0e0e0;
+        }
+        .toggle-btn.active {
+            background: #333;
+            color: white;
+            border-color: #333;
+        }
+        .cell-clickable {
+            cursor: pointer;
+        }
+        .cell-clickable:hover {
+            opacity: 0.8;
+        }
+        .legend-item {
+            cursor: pointer;
+        }
+        .legend-item:hover {
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <!-- INTRO SCREEN -->
+    <div id="intro-overlay">
+        <div id="intro-title">When They Vanish</div>
+        <div id="intro-options">
+            <button class="intro-option selected" id="btn-narrative">
+                <span class="indicator"></span> narrative version
+            </button>
+            <button class="intro-option" id="btn-skip">
+                <span class="indicator"></span> go directly to data visualisation
+            </button>
+        </div>
+    </div>
+
+    <!--  SQUARES ANIMATION -->
+    <div id="narrative-particles"></div>
+
+    <!-- NARRATIVE SCREEN -->
+    <div id="narrative-overlay">
+        <div id="narrative-text" class="typewriter-text"></div>
+        <div id="narrative-next">Press ENTER to continue</div>
+    </div>
+
+    <!-- LEGEND SCREEN -->
+    <div id="legend-overlay">
+        <div id="legend-content">
+            <div id="legend-text" class="typewriter-text"></div>
+        </div>
+        <div id="legend-next">Press ENTER to continue</div>
+    </div>
+
+    <div id="tooltip"></div>
+    <div id="popup-overlay">
+        <div id="popup-container">
+            <span id="popup-close">&times;</span>
+            <div id="popup-title"></div>
+            <div id="popup-subtitle"></div>
+            <div id="popup-controls">
+                <span>Group by:</span>
+                <button class="toggle-btn active" data-view="origin">Country of Origin</button>
+                <button class="toggle-btn" data-view="incident">Region of Incident</button>
+            </div>
+            <div id="popup-content"></div>
+        </div>
+    </div>
+    <div id="chart-container"></div>
+    <div id="left-header">
+        <h1>When They Vanish</h1>
+        <p>Every year, hundreds and sometimes thousands of people attempting to migrate go missing. Migrants that are lost in translation between dangerous migration routes, bordeers, policies and legal systems that fail to protect them. As the global trend of missing migrants increases, it becomes paramount to document and communicate the magnitude of this issue, so to honor the memory of those who vanished and take a first step towards creating a more accountable migration system.</p>
+        <div id="migrant-legend">Each <span class="legend-square"></span> = one missing migrant</div>
+    </div>
+    <div id="sidebar-trend">
+        <div id="sidebar-area-chart"></div>
+    </div>
+    <div id="sidebar-origin">
+        <div id="sidebar-legend"></div>
+    </div>
+    <script>
+        d3.csv("./missing_migrants_grid_ver5.csv").then(function(data) {
+
+            // Store raw data - POPUP VIEW
+            const rawData = data.map(d => ({...d}));
+
+            // Convert numeric fields
+            data.forEach(function(d) {
+                d["Total Number of Dead and Missing"] = +d["Total Number of Dead and Missing"];
+                d["Incident Year"] = +d["Incident Year"];
+                d["Number of Females"] = +d["Number of Females"] || 0;
+                d["Number of Males"] = +d["Number of Males"] || 0;
+                d["Number of Children"] = +d["Number of Children"] || 0;
+            });
+
+            rawData.forEach(function(d) {
+                d["Total Number of Dead and Missing"] = +d["Total Number of Dead and Missing"];
+                d["Incident Year"] = +d["Incident Year"];
+                d["Number of Females"] = +d["Number of Females"] || 0;
+                d["Number of Males"] = +d["Number of Males"] || 0;
+                d["Number of Children"] = +d["Number of Children"] || 0;
+            });
+
+            data = data.filter(function(d) {
+                const country = d["Country of Origin"];
+                if (!country || d["Total Number of Dead and Missing"] <= 0) {
+                    return false;
+                }
+
+                // Exclude non-country entries
+                const excludedTerms = [
+                    "Unknown", "Mixed", "various", "Multiple", "Other",
+                    "Africa", "Asia", "Europe", "Latin America", "Middle East",
+                    "Sub-Saharan", "North Africa", "West Africa", "East Africa",
+                    "South Asia", "Southeast Asia", "Central Asia",
+                    "Central America", "South America", "Caribbean",
+                    "Middle East and North Africa", "Sub-Saharan Africa","Algeria,Bangladesh,Côte d'Ivoire,Egypt,Eritrea,Gambia,Ghana,Guinea,Mali,Niger,Sierra Leone,Somalia,Sudan,Syrian Arab Republic,Tunisia,Zambia"
+                ];
+
+                // (case-insensitive)
+                const isExcluded = excludedTerms.some(term =>
+                    country.toLowerCase().includes(term.toLowerCase())
+                );
+
+                return !isExcluded;
+            });
+
+            // Find top 8
+            const countryTotals = d3.rollup(
+                data,
+                v => d3.sum(v, d => d["Total Number of Dead and Missing"]),
+                d => d["Country of Origin"]
+            );
+
+            const top10Countries = Array.from(countryTotals)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 8)
+                .map(d => d[0]);
+
+            console.log("Top 8 countries:", top10Countries);
+
+            // Filter data to only top 8 countries
+            data = data.filter(d => top10Countries.includes(d["Country of Origin"]));
+
+            // Build expanded individual records: year → month → country → [{gender, causeOfDeath}]
+            const individualRecords = {};
+            data.forEach(d => {
+                const year = d["Incident Year"];
+                const month = d["Month"];
+                const country = d["Country of Origin"];
+                const cause = d["Cause of Death"] || "Unknown";
+                const total = d["Total Number of Dead and Missing"];
+                const females = d["Number of Females"];
+                const males = d["Number of Males"];
+                const children = d["Number of Children"];
+
+                if (!individualRecords[year]) individualRecords[year] = {};
+                if (!individualRecords[year][month]) individualRecords[year][month] = {};
+                if (!individualRecords[year][month][country]) individualRecords[year][month][country] = [];
+
+                const arr = individualRecords[year][month][country];
+                for (let i = 0; i < females; i++) arr.push({ gender: "Woman", causeOfDeath: cause });
+                for (let i = 0; i < males; i++) arr.push({ gender: "Man", causeOfDeath: cause });
+                for (let i = 0; i < children; i++) arr.push({ gender: "Child", causeOfDeath: cause });
+                const known = females + males + children;
+                for (let i = 0; i < total - known; i++) arr.push({ gender: "Unknown", causeOfDeath: cause });
+            });
+
+            // Define months in order
+            const months = ["January", "February", "March", "April", "May", "June",
+                           "July", "August", "September", "October", "November", "December"];
+
+
+            const years = Array.from(new Set(data.map(d => d["Incident Year"]))).sort();
+
+            // Aggregate by year, month, and country
+            const aggregated = d3.rollup(
+                data,
+                v => d3.sum(v, d => d["Total Number of Dead and Missing"]),
+                d => d["Incident Year"],
+                d => d["Month"],
+                d => d["Country of Origin"]
+            );
+
+            // Aggregate by year, month, region, and country for the region view with country colors
+            const aggregatedByRegionAndCountry = d3.rollup(
+                data.filter(d => d["Total Number of Dead and Missing"] > 0 && top10Countries.includes(d["Country of Origin"])),
+                v => d3.sum(v, d => d["Total Number of Dead and Missing"]),
+                d => d["Incident Year"],
+                d => d["Month"],
+                d => d["Region of Incident"],
+                d => d["Country of Origin"]
+            );
+
+            // 1 rec = 1 migrant
+            const migrantsPerRect = 1;
+            const rectWidth = 2;
+            const rectHeight = 2;
+            const rectSpacing = 2.1;
+
+            let maxCircles = 0;
+
+            // Prepare data for visualization 
+            const vizData = [];
+            years.forEach(year => {
+                months.forEach(month => {
+                    const countryData = [];
+                    let cellTotal = 0;
+                    let cellCircles = 0;
+
+                    top10Countries.forEach(country => {
+                        const total = aggregated.get(year)?.get(month)?.get(country) || 0;
+                        const numRects = Math.round(total / migrantsPerRect);
+                        cellTotal += total;
+                        cellCircles += numRects;
+                        if (total > 0) {
+                            const individuals = (individualRecords[year] && individualRecords[year][month] && individualRecords[year][month][country]) || [];
+                            countryData.push({
+                                country: country,
+                                total: total,
+                                numRects: numRects,
+                                individuals: individuals
+                            });
+                        }
+                    });
+
+                    // Get region of incident data for this cell 
+                    const regionData = [];
+                    const regionMap = aggregatedByRegionAndCountry.get(year)?.get(month);
+                    if (regionMap) {
+                        regionMap.forEach((countryMap, region) => {
+                            if (region) {
+                                const countryBreakdown = [];
+                                let regionTotal = 0;
+                                countryMap.forEach((total, country) => {
+                                    regionTotal += total;
+                                    const individuals = (individualRecords[year] && individualRecords[year][month] && individualRecords[year][month][country]) || [];
+                                    countryBreakdown.push({
+                                        country: country,
+                                        total: total,
+                                        numRects: Math.round(total / migrantsPerRect),
+                                        individuals: individuals
+                                    });
+                                });
+                                if (regionTotal > 0) {
+                                    regionData.push({
+                                        region: region,
+                                        total: regionTotal,
+                                        numRects: Math.round(regionTotal / migrantsPerRect),
+                                        countryBreakdown: countryBreakdown
+                                    });
+                                }
+                            }
+                        });
+                    }
+
+                    if (cellCircles > maxCircles) maxCircles = cellCircles;
+
+                    vizData.push({
+                        year: year,
+                        month: month,
+                        countries: countryData,
+                        regions: regionData,
+                        cellTotal: cellTotal,
+                        cellCircles: cellCircles
+                    });
+                });
+            });
+
+            console.log("Max circles in a cell:", maxCircles);
+
+            // Aggregate yearly totals for area chart
+            const yearlyTotals = Array.from(
+                d3.rollup(data, v => d3.sum(v, d => d["Total Number of Dead and Missing"]), d => d["Incident Year"]),
+                ([year, total]) => ({ year, total })
+            ).sort((a, b) => a.year - b.year);
+
+            // Calculate cell size based on max rectangles needed - smaller grid
+            const rectsPerRow = Math.ceil(Math.sqrt(maxCircles * 1.2));
+            const cellWidth = Math.max(45, rectsPerRow * rectSpacing + 8);
+            const cellHeight = Math.max(5, Math.ceil(maxCircles / rectsPerRow) * rectSpacing + 8);
+
+            // Set up dimensions
+            const margin = {top: 40, right: 40, bottom: 40, left: 60};
+            const width = months.length * cellWidth + margin.left + margin.right;
+            const height = years.length * cellHeight + margin.top + margin.bottom;
+
+            // Create SVG -> chart container
+            const svg = d3.select("#chart-container")
+                .append("svg")
+                .attr("width", width)
+                .attr("height", height);
+
+            // Create scales
+            const xScale = d3.scaleBand()
+                .domain(months)
+                .range([margin.left, width - margin.right])
+                .padding(0.03);
+
+            const yScale = d3.scaleBand()
+                .domain(years)
+                .range([margin.top, height - margin.bottom])
+                .padding(0.03);
+
+            // Color scale for countries — hue by continent, intensity by rank
+            // Asia (red): Afghanistan, Myanmar, Syria
+            // Africa (blue): Ethiopia, Algeria, Morocco
+            // Americas (green): Mexico, Venezuela
+            const continentColors = {
+                "Afghanistan": "#FF0000",           // Asia — dark red
+                "Myanmar": "#F36B6B",               // Asia — medium red
+                "Syrian Arab Republic": "#FFADAD",  // Asia — light red
+                "Algeria": "#40C4FF",               // Africa — medium blue
+                "Morocco": "#7C4DFF", 
+                "Ethiopia": "#0000FD",              // Africa — dark blue
+                //"Algeria": "#8585FF",               // Africa — medium blue
+                //"Morocco": "#00FFF0",               // Africa — light blue
+                "Mexico": "#5EE87E",                // Americas — dark green
+                "Venezuela (Bolivarian Republic of)": "#1b5e20"              // Americas — light green
+            };
+            const colorScale = d3.scaleOrdinal()
+                .domain(top10Countries)
+                .range(top10Countries.map(c => continentColors[c] || "#999"));
+
+            // Color scale for regions
+            const regionColorScale = d3.scaleOrdinal()
+                .range(["#8e44ad", "#2980b9", "#27ae60", "#f39c12", "#e74c3c",
+                        "#1abc9c", "#d35400", "#c0392b", "#7f8c8d", "#2c3e50",
+                        "#16a085", "#e91e63", "#00bcd4", "#ff5722"]);
+
+            // AREA CHART WITH BRUSH (in sidebar)
+            const areaW = 280, areaH = 40;
+
+            const sidebarAreaChart = d3.select("#sidebar-area-chart");
+
+            sidebarAreaChart.append("div")
+                .attr("class", "sidebar-legend-title")
+                .text("Chronological Trend");
+
+            sidebarAreaChart.append("div")
+                .attr("class", "sidebar-legend-subtitle")
+                .text("Missing migrants per year | Drag to select interval");
+
+            const areaLeftPad = 15;
+            const areaSvgTotalW = areaW + areaLeftPad + 10;
+            const areaSvg = sidebarAreaChart.append("svg")
+                .attr("width", areaSvgTotalW)
+                .attr("height", areaH + 25)
+                .style("display", "block")
+                .style("margin", "0 auto");
+
+            const areaGroup = areaSvg.append("g")
+                .attr("transform", `translate(${areaLeftPad}, 5)`);
+
+            // Scales
+            const areaXScale = d3.scaleLinear()
+                .domain(d3.extent(yearlyTotals, d => d.year))
+                .range([0, areaW]);
+
+            const areaYScale = d3.scaleLinear()
+                .domain([0, d3.max(yearlyTotals, d => d.total)])
+                .range([areaH, 0]);
+
+            // Area generator
+            const areaGen = d3.area()
+                .x(d => areaXScale(d.year))
+                .y0(areaH)
+                .y1(d => areaYScale(d.total))
+                .curve(d3.curveMonotoneX);
+
+            // Background area (grey — always visible)
+            areaGroup.append("path")
+                .datum(yearlyTotals)
+                .attr("class", "area-bg")
+                .attr("d", areaGen)
+                .attr("fill", "#ddd")
+                .attr("fill-opacity", 0.4);
+
+            // Clip path for active selection
+            const clipId = "area-clip";
+            const clipRect = areaSvg.append("defs")
+                .append("clipPath")
+                .attr("id", clipId)
+                .append("rect")
+                .attr("x", 0)
+                .attr("y", 0)
+                .attr("width", areaW)
+                .attr("height", areaH);
+
+            // Active area (coloured — clipped by brush)
+            areaGroup.append("path")
+                .datum(yearlyTotals)
+                .attr("class", "area-active")
+                .attr("d", areaGen)
+                .attr("fill", "#888")
+                .attr("fill-opacity", 0.55)
+                .attr("clip-path", `url(#${clipId})`);
+
+            // X axis for area chart (years only)
+            const areaXAxis = d3.axisBottom(areaXScale)
+                .ticks(yearlyTotals.length)
+                .tickFormat(d3.format("d"));
+
+            areaGroup.append("g")
+                .attr("transform", `translate(0, ${areaH})`)
+                .call(areaXAxis)
+                .call(g => g.select(".domain").remove())
+                .call(g => g.selectAll(".tick line").remove())
+                .selectAll("text")
+                .style("font-size", "7px")
+                .style("font-family", "'Inconsolata', Monaco, monospace")
+                .style("fill", "#999");
+
+            // === RANGE SLIDER (two draggable handles) ===
+            let rangeLeft = 0;
+            let rangeRight = areaW;
+            const handleRadius = 4;
+            const handleY = areaH;
+
+            // Shaded overlay for unselected regions (left and right)
+            const overlayLeft = areaGroup.append("rect")
+                .attr("class", "range-overlay")
+                .attr("x", 0).attr("y", 0)
+                .attr("width", 0).attr("height", areaH)
+                .attr("fill", "#fff").attr("fill-opacity", 0.7);
+
+            const overlayRight = areaGroup.append("rect")
+                .attr("class", "range-overlay")
+                .attr("x", areaW).attr("y", 0)
+                .attr("width", 0).attr("height", areaH)
+                .attr("fill", "#fff").attr("fill-opacity", 0.7);
+
+            // Vertical lines at handle positions
+            const lineLeft = areaGroup.append("line")
+                .attr("x1", rangeLeft).attr("y1", 0)
+                .attr("x2", rangeLeft).attr("y2", areaH)
+                .attr("stroke", "black").attr("stroke-width", 0.5)
+                .attr("class", "range-handle")
+                .attr("stroke-dasharray", "3,2")
+                .style("cursor", "ew-resize")
+                .style("pointer-events", "stroke");
+
+            // Invisible wider hit area for left line (easier to grab)
+            const lineLeftHit = areaGroup.append("line")
+                .attr("x1", rangeLeft).attr("y1", 0)
+                .attr("x2", rangeLeft).attr("y2", areaH)
+                .attr("stroke", "transparent").attr("stroke-width", 8)
+                .style("cursor", "ew-resize");
+
+            const lineRight = areaGroup.append("line")
+                .attr("x1", rangeRight).attr("y1", 0)
+                .attr("x2", rangeRight).attr("y2", areaH)
+                .attr("stroke", "black").attr("stroke-width", 1)
+                .attr("class", "range-handle")
+                .attr("stroke-dasharray", "3,2")
+                .style("cursor", "ew-resize")
+                .style("pointer-events", "stroke");
+
+            // Invisible wider hit area for right line (easier to grab)
+            const lineRightHit = areaGroup.append("line")
+                .attr("x1", rangeRight).attr("y1", 0)
+                .attr("x2", rangeRight).attr("y2", areaH)
+                .attr("stroke", "transparent").attr("stroke-width", 8)
+                .style("cursor", "ew-resize");
+
+            // Left handle
+            const handleLeftG = areaGroup.append("g")
+                .attr("class", "range-handle")
+                .style("cursor", "ew-resize");
+
+            handleLeftG.append("circle")
+                .attr("cx", rangeLeft).attr("cy", handleY)
+                .attr("r", handleRadius)
+                .attr("fill", "white").attr("stroke", "black").attr("stroke-width", 1)
+
+            // Right handle
+            const handleRightG = areaGroup.append("g")
+                .attr("class", "range-handle")
+                .style("cursor", "ew-resize");
+
+            handleRightG.append("circle")
+                .attr("cx", rangeRight).attr("cy", handleY)
+                .attr("r", handleRadius)
+                .attr("fill", "white").attr("stroke", "black").attr("stroke-width", 1);
+
+            function updateRange() {
+                // Update clip rect
+                clipRect.attr("x", rangeLeft).attr("width", rangeRight - rangeLeft);
+
+                // Update overlays
+                overlayLeft.attr("x", 0).attr("width", rangeLeft);
+                overlayRight.attr("x", rangeRight).attr("width", areaW - rangeRight);
+
+                // Update vertical lines
+                lineLeft.attr("x1", rangeLeft).attr("x2", rangeLeft);
+                lineLeftHit.attr("x1", rangeLeft).attr("x2", rangeLeft);
+                lineRight.attr("x1", rangeRight).attr("x2", rangeRight);
+                lineRightHit.attr("x1", rangeRight).attr("x2", rangeRight);
+
+                // Update handle positions
+                handleLeftG.select("circle").attr("cx", rangeLeft);
+                handleRightG.select("circle").attr("cx", rangeRight);
+
+                // Determine selected year range
+                const yearMin = areaXScale.invert(rangeLeft);
+                const yearMax = areaXScale.invert(rangeRight);
+
+                // Dim grid cells outside selection
+                const allSelected = rangeLeft <= 1 && rangeRight >= areaW - 1;
+                years.forEach(year => {
+                    if (allSelected) {
+                        svg.selectAll(`.cell-year-${year}`).style("opacity", null);
+                    } else {
+                        const inRange = year >= Math.round(yearMin) && year <= Math.round(yearMax);
+                        svg.selectAll(`.cell-year-${year}`).style("opacity", inRange ? 1 : 0.1);
+                    }
+                });
+            }
+
+            // Snap pixel position to nearest year
+            function snapToYear(pixelX) {
+                const year = areaXScale.invert(pixelX);
+                const snappedYear = Math.round(year);
+                const clamped = Math.max(years[0], Math.min(years[years.length - 1], snappedYear));
+                return areaXScale(clamped);
+            }
+
+            // Drag behaviour for left handle (snaps to year)
+            const dragLeft = d3.drag()
+                .on("drag", function(event) {
+                    const snapped = snapToYear(event.x);
+                    rangeLeft = Math.max(0, Math.min(snapped, rangeRight - 10));
+                    updateRange();
+                });
+
+            // Drag behaviour for right handle (snaps to year)
+            const dragRight = d3.drag()
+                .on("drag", function(event) {
+                    const snapped = snapToYear(event.x);
+                    rangeRight = Math.min(areaW, Math.max(snapped, rangeLeft + 10));
+                    updateRange();
+                });
+
+            // Apply drag to circle handles
+            handleLeftG.call(dragLeft);
+            handleRightG.call(dragRight);
+
+            // Apply drag to dashed lines and their hit areas
+            lineLeft.call(dragLeft);
+            lineLeftHit.call(dragLeft);
+            lineRight.call(dragRight);
+            lineRightHit.call(dragRight);
+
+            // Double-click on area chart to reset range
+            areaGroup.on("dblclick", function() {
+                rangeLeft = 0;
+                rangeRight = areaW;
+                updateRange();
+            });
+
+            // Create tooltip
+            const tooltip = d3.select("#tooltip");
+
+            // Seeded random function for "messy" positions
+            function seededRandom(seed) {
+                const x = Math.sin(seed) * 10000;
+                return x - Math.floor(x);
+            }
+
+            // Store rectangle elements (no animation needed)
+            const allRectData = [];
+
+            // Popup functionality
+            const popupOverlay = d3.select("#popup-overlay");
+            const popupTitle = d3.select("#popup-title");
+            const popupSubtitle = d3.select("#popup-subtitle");
+            const popupContent = d3.select("#popup-content");
+
+            let currentCellData = null;
+            let currentView = "origin";
+            let currentAnimationId = null;
+
+            d3.select("#popup-close").on("click", closePopup);
+            popupOverlay.on("click", function(event) {
+                if (event.target === this.node()) closePopup();
+            });
+
+            // Toggle button handlers
+            d3.selectAll(".toggle-btn").on("click", function() {
+                const view = d3.select(this).attr("data-view");
+                if (view !== currentView && currentCellData) {
+                    currentView = view;
+                    d3.selectAll(".toggle-btn").classed("active", false);
+                    d3.select(this).classed("active", true);
+                    renderNetworkGraph(currentCellData, currentView);
+                }
+            });
+
+            function closePopup() {
+                if (currentAnimationId) {
+                    cancelAnimationFrame(currentAnimationId);
+                    currentAnimationId = null;
+                }
+                popupOverlay.style("display", "none");
+                popupContent.html("");
+                const sidebarOrigin = document.getElementById('sidebar-origin');
+                if (sidebarOrigin) sidebarOrigin.classList.remove('popup-visible');
+                currentCellData = null;
+            }
+
+            function showNetworkPopup(cellData) {
+                currentCellData = cellData;
+                currentView = "origin";
+
+                // Reset toggle buttons
+                d3.selectAll(".toggle-btn").classed("active", false);
+                d3.select(".toggle-btn[data-view='origin']").classed("active", true);
+
+                popupTitle.text(`${cellData.month} ${cellData.year}`);
+                popupSubtitle.text(`Total Dead & Missing: ${cellData.cellTotal.toLocaleString()}`);
+
+                const sidebarOrigin = document.getElementById('sidebar-origin');
+                if (sidebarOrigin) sidebarOrigin.classList.add('popup-visible');
+
+                renderNetworkGraph(cellData, "origin");
+                popupOverlay.style("display", "flex");
+            }
+
+            function renderNetworkGraph(cellData, viewType) {
+                // Cancel any existing animation
+                if (currentAnimationId) {
+                    cancelAnimationFrame(currentAnimationId);
+                    currentAnimationId = null;
+                }
+
+                popupContent.html("");
+
+                const popupWidth = 800;
+                const popupHeight = 600;
+
+                const popupSvg = popupContent.append("svg")
+                    .attr("width", popupWidth)
+                    .attr("height", popupHeight);
+
+                // Center point where all circles start
+                const centerX = popupWidth / 2;
+                const centerY = popupHeight / 2;
+
+                // Get data based on view type
+                let itemsData, getLabel;
+
+                if (viewType === "origin") {
+                    itemsData = cellData.countries.filter(c => c.numRects > 0).map(c => ({
+                        name: c.country,
+                        total: c.total,
+                        numRects: c.numRects,
+                        countryBreakdown: [{country: c.country, total: c.total, numRects: c.numRects, individuals: c.individuals || []}]
+                    }));
+                    getLabel = "Country of Origin";
+                } else {
+                    itemsData = cellData.regions.filter(r => r.numRects > 0).map(r => ({
+                        name: r.region,
+                        total: r.total,
+                        numRects: r.numRects,
+                        countryBreakdown: r.countryBreakdown.map(cb => ({...cb, individuals: cb.individuals || []}))
+                    }));
+                    getLabel = "Region of Incident";
+                }
+
+                // Sort from most to least missing migrants
+                itemsData.sort((a, b) => b.total - a.total);
+
+                if (itemsData.length === 0) {
+                    popupSvg.append("text")
+                        .attr("x", centerX)
+                        .attr("y", centerY)
+                        .attr("text-anchor", "middle")
+                        .style("font-size", "14px")
+                        .style("fill", "#666")
+                        .text("No data available for this view");
+                    return;
+                }
+
+                const numItems = itemsData.length;
+
+                // Arrange groups in a grid layout
+                const gridCols = Math.ceil(Math.sqrt(numItems));
+                const gridRows = Math.ceil(numItems / gridCols);
+                const cellPadding = 10;
+                const labelSpace = 25; // space below mosaic for label
+                const cellW = (popupWidth - cellPadding * 2) / gridCols;
+                const cellH = (popupHeight - cellPadding * 2 - 15) / gridRows; // 15 for bottom legend
+
+                // Create item target positions on a grid
+                const itemPositions = {};
+                itemsData.forEach((item, i) => {
+                    const col = i % gridCols;
+                    const row = Math.floor(i / gridCols);
+                    itemPositions[item.name] = {
+                        x: cellPadding + col * cellW + cellW / 2,
+                        y: cellPadding + row * cellH + (cellH - labelSpace) / 2
+                    };
+                });
+
+                // Create rectangles data - mosaic grid layout per group
+                const popupRectSize = 6;
+                const popupRectGap = 1;
+                const rectsData = [];
+                itemsData.forEach(item => {
+                    const targetPos = itemPositions[item.name];
+
+                    // Collect all rects for this group (across country breakdowns)
+                    // Each rect gets an individual record (gender + cause of death)
+                    const groupRects = [];
+                    item.countryBreakdown.forEach(countryData => {
+                        const individuals = countryData.individuals || [];
+                        for (let i = 0; i < countryData.numRects; i++) {
+                            const individual = individuals[i] || { gender: "Unknown", causeOfDeath: "Unknown" };
+                            groupRects.push({
+                                country: countryData.country,
+                                gender: individual.gender,
+                                causeOfDeath: individual.causeOfDeath
+                            });
+                        }
+                    });
+
+                    // Calculate mosaic grid dimensions centered on target position
+                    const totalRects = groupRects.length;
+                    const cols = Math.ceil(Math.sqrt(totalRects));
+                    const rows = Math.ceil(totalRects / cols);
+                    const step = popupRectSize + popupRectGap;
+                    const gridW = cols * step;
+                    const gridH = rows * step;
+                    const originX = targetPos.x - gridW / 2;
+                    const originY = targetPos.y - gridH / 2;
+
+                    groupRects.forEach((rect, idx) => {
+                        const col = idx % cols;
+                        const row = Math.floor(idx / cols);
+
+                        // Random start position around center
+                        const startAngle = seededRandom(idx * 100 + rect.country.length) * Math.PI * 2;
+                        const startRadius = seededRandom(idx * 200 + rect.country.length * 2) * 25;
+
+                        rectsData.push({
+                            name: item.name,
+                            country: rect.country,
+                            gender: rect.gender,
+                            causeOfDeath: rect.causeOfDeath,
+                            startX: centerX + Math.cos(startAngle) * startRadius,
+                            startY: centerY + Math.sin(startAngle) * startRadius,
+                            endX: originX + col * step + popupRectSize / 2,
+                            endY: originY + row * step + popupRectSize / 2,
+                            delay: seededRandom(idx * 500) * 600,
+                            seed: idx * 1000 + rect.country.length
+                        });
+                    });
+                });
+
+                // Shuffle rectangles
+                for (let i = rectsData.length - 1; i > 0; i--) {
+                    const j = Math.floor(seededRandom(i * 777) * (i + 1));
+                    [rectsData[i], rectsData[j]] = [rectsData[j], rectsData[i]];
+                }
+
+                // Helper to deselect / close tooltip
+                function deselectAll() {
+                    popupSvg.selectAll(".rect-info-tooltip").remove();
+                    popupSvg.selectAll(".migrant-rect")
+                        .attr("fill", d => colorScale(d.country))
+                        .attr("fill-opacity", 0.9)
+                        .attr("stroke", "none")
+                        .classed("selected-rect", false);
+                    popupSvg.on("click.tooltip", null);
+                }
+
+                // Draw rectangles - always colored by country of origin
+                const rects = popupSvg.selectAll(".migrant-rect")
+                    .data(rectsData)
+                    .join("rect")
+                    .attr("class", "migrant-rect")
+                    .attr("x", d => d.startX - popupRectSize/2)
+                    .attr("y", d => d.startY - popupRectSize/2)
+                    .attr("width", popupRectSize)
+                    .attr("height", popupRectSize)
+                    .attr("fill", d => colorScale(d.country))
+                    .attr("fill-opacity", 0.9)
+                    .attr("stroke", "none")
+                    .style("cursor", "pointer")
+                    .on("mouseover", function(event, d) {
+                        // Hover: dark stroke to signal clickability
+                        d3.select(this)
+                            .attr("stroke", "#333")
+                            .attr("stroke-width", 1.5);
+                    })
+                    .on("mouseout", function(event, d) {
+                        // Remove hover stroke (unless this rect is the selected one)
+                        const el = d3.select(this);
+                        if (!el.classed("selected-rect")) {
+                            el.attr("stroke", "none");
+                        }
+                    })
+                    .on("click", function(event, d) {
+                        event.stopPropagation();
+
+                        // Clear previous selection
+                        deselectAll();
+
+                        // Grey out all other rects, highlight selected
+                        rects.attr("fill", "#ddd").attr("fill-opacity", 0.3).attr("stroke", "none");
+                        d3.select(this)
+                            .attr("fill", colorScale(d.country))
+                            .attr("fill-opacity", 1)
+                            .attr("stroke", "#333")
+                            .attr("stroke-width", 1.5)
+                            .classed("selected-rect", true);
+
+                        // Build tooltip content
+                        const tooltipG = popupSvg.append("g")
+                            .attr("class", "rect-info-tooltip");
+
+                        const padding = 12;
+                        const lineHeight = 16;
+                        const tooltipW = 220;
+                        const lines = [
+                            { text: d.country, size: "11px", weight: "bold", fill: colorScale(d.country) },
+                            { text: `Gender: ${d.gender}`, size: "10px", weight: "normal", fill: "#444" },
+                            { text: `Cause: ${d.causeOfDeath}`, size: "10px", weight: "normal", fill: "#444" }
+                        ];
+
+                        // Wrap long cause text into multiple lines
+                        const maxCharsPerLine = 30;
+                        const expandedLines = [];
+                        lines.forEach(line => {
+                            if (line.text.length > maxCharsPerLine) {
+                                const words = line.text.split(" ");
+                                let currentLine = "";
+                                words.forEach(word => {
+                                    if ((currentLine + " " + word).trim().length <= maxCharsPerLine) {
+                                        currentLine = (currentLine + " " + word).trim();
+                                    } else {
+                                        if (currentLine) expandedLines.push({ ...line, text: currentLine });
+                                        currentLine = word;
+                                    }
+                                });
+                                if (currentLine) expandedLines.push({ ...line, text: currentLine });
+                            } else {
+                                expandedLines.push(line);
+                            }
+                        });
+
+                        const tooltipH = expandedLines.length * lineHeight + padding * 2 + 8; // +8 for close button area
+
+                        // Position tooltip near the clicked rect
+                        let tx = d.endX + popupRectSize + 8;
+                        let ty = d.endY - tooltipH / 2;
+
+                        // Keep tooltip within bounds
+                        if (tx + tooltipW > popupWidth - 5) tx = d.endX - tooltipW - 8;
+                        if (ty + tooltipH > popupHeight - 5) ty = popupHeight - tooltipH - 5;
+                        if (ty < 5) ty = 5;
+
+                        // Background rect with shadow
+                        tooltipG.append("rect")
+                            .attr("x", tx)
+                            .attr("y", ty)
+                            .attr("width", tooltipW)
+                            .attr("height", tooltipH)
+                            .attr("rx", 5)
+                            .attr("fill", "white")
+                            .attr("stroke", "#999")
+                            .attr("stroke-width", 1)
+                            .style("filter", "drop-shadow(0 2px 4px rgba(0,0,0,0.15))");
+
+                        // Close button (×)
+                        tooltipG.append("text")
+                            .attr("x", tx + tooltipW - 14)
+                            .attr("y", ty + 14)
+                            .style("font-size", "14px")
+                            .style("fill", "#999")
+                            .style("cursor", "pointer")
+                            .text("×")
+                            .on("click", function(e) {
+                                e.stopPropagation();
+                                deselectAll();
+                            })
+                            .on("mouseover", function() { d3.select(this).style("fill", "#333"); })
+                            .on("mouseout", function() { d3.select(this).style("fill", "#999"); });
+
+                        // Text lines
+                        expandedLines.forEach((line, i) => {
+                            tooltipG.append("text")
+                                .attr("x", tx + padding)
+                                .attr("y", ty + padding + 12 + i * lineHeight)
+                                .style("font-size", line.size)
+                                .style("font-weight", line.weight)
+                                .style("font-family", "'Inconsolata', Monaco, monospace")
+                                .style("fill", line.fill)
+                                .text(line.text);
+                        });
+
+                        // Close on clicking anywhere else in the popup SVG
+                        popupSvg.on("click.tooltip", function() {
+                            deselectAll();
+                        });
+                    });
+
+                // Animate rectangles to their positions
+                const maxDelay = 300 + 600; // 300 base + max 600 stagger
+                const moveDuration = 1200;
+                rects.transition()
+                    .delay(d => 300 + d.delay)
+                    .duration(moveDuration)
+                    .ease(d3.easeCubicOut)
+                    .attr("x", d => d.endX - popupRectSize/2)
+                    .attr("y", d => d.endY - popupRectSize/2);
+
+                // Add labels that fade in AFTER rectangles finish assembling
+                const labelFadeDelay = maxDelay + moveDuration + 200; // wait for animation to finish + small buffer
+
+                //  labels align horizontally
+                const step = popupRectSize + popupRectGap;
+                const maxMosaicHPerRow = {};
+                itemsData.forEach((item, i) => {
+                    const row = Math.floor(i / gridCols);
+                    const totalRects = item.numRects;
+                    const mosaicCols = Math.ceil(Math.sqrt(totalRects));
+                    const mosaicRows = Math.ceil(totalRects / mosaicCols);
+                    const mosaicH = mosaicRows * step;
+                    maxMosaicHPerRow[row] = Math.max(maxMosaicHPerRow[row] || 0, mosaicH);
+                });
+
+                itemsData.forEach((item, i) => {
+                    const pos = itemPositions[item.name];
+                    const row = Math.floor(i / gridCols);
+
+                    // Use the tallest mosaic height in this row for consistent label positioning
+                    const labelY = pos.y + maxMosaicHPerRow[row] / 2 + 14;
+
+                    const displayName = item.name.length > 22 ? item.name.substring(0, 20) + "..." : item.name;
+                    const labelColor = viewType === "origin" ? colorScale(item.name) : "#333";
+
+                    // Country/region name
+                    popupSvg.append("text")
+                        .attr("x", pos.x)
+                        .attr("y", labelY)
+                        .attr("text-anchor", "middle")
+                        .style("font-size", "11px")
+                        .style("font-weight", "bold")
+                        .style("font-family", "'Inconsolata', Monaco, monospace")
+                        .style("fill", labelColor)
+                        .style("opacity", 0)
+                        .text(displayName)
+                        .transition()
+                        .delay(labelFadeDelay)
+                        .duration(600)
+                        .style("opacity", 1);
+
+                    // Migrant count
+                    popupSvg.append("text")
+                        .attr("x", pos.x)
+                        .attr("y", labelY + 14)
+                        .attr("text-anchor", "middle")
+                        .style("font-size", "9px")
+                        .style("font-family", "'Inconsolata', Monaco, monospace")
+                        .style("fill", "#666")
+                        .style("opacity", 0)
+                        .text(`${item.total.toLocaleString()} migrants`)
+                        .transition()
+                        .delay(labelFadeDelay)
+                        .duration(600)
+                        .style("opacity", 1);
+                });
+
+                // Add legend at bottom
+                const legendY = popupHeight - 10;
+                popupSvg.append("text")
+                    .attr("x", centerX)
+                    .attr("y", legendY)
+                    .attr("text-anchor", "middle")
+                    .style("font-size", "9px")
+                    .style("fill", "#999")
+                    .style("opacity", 0)
+                    .text(`Grouped by: ${getLabel} | 1 square = 1 migrants`)
+                    .transition()
+                    .delay(labelFadeDelay)
+                    .duration(600)
+                    .style("opacity", 1);
+            }
+
+            // Draw grid cells and circles
+            vizData.forEach((d, dataIndex) => {
+                const cellX = xScale(d.month);
+                const cellY = yScale(d.year);
+                const cellW = xScale.step();
+                const cellH = yScale.step();
+
+                // Draw cell background (no border — single separators drawn separately)
+                svg.append("rect")
+                    .attr("class", `cell-bg cell-year-${d.year}`)
+                    .attr("x", cellX)
+                    .attr("y", cellY)
+                    .attr("width", cellW)
+                    .attr("height", cellH)
+                    .attr("fill", "#fff")
+                    .attr("stroke", "none");
+
+                if (d.cellCircles > 0) {
+                    // Create a group for all circles in this cell
+                    const cellGroup = svg.append("g")
+                        .attr("class", `cell-group cell-clickable cell-year-${d.year}`)
+                        .on("click", function() {
+                            tooltip.style("opacity", 0);
+                            showNetworkPopup(d);
+                        });
+
+                    // Add invisible rect for hover/click area
+                    cellGroup.append("rect")
+                        .attr("x", cellX)
+                        .attr("y", cellY)
+                        .attr("width", cellW)
+                        .attr("height", cellH)
+                        .attr("fill", "transparent")
+                        .on("mouseover", function(event) {
+                            let countryBreakdown = d.countries
+                                .sort((a, b) => b.total - a.total)
+                                .map(c => `<span style="color:${colorScale(c.country)}">&#9632;</span> ${c.country}: ${c.total.toLocaleString()}`)
+                                .join("<br/>");
+
+                            tooltip
+                                .style("opacity", 1)
+                                .html(`
+                                    <strong>${d.month} ${d.year}</strong><br/>
+                                    Total Dead & Missing: ${d.cellTotal.toLocaleString()}<br/>
+                                    <hr style="margin: 5px 0; border: none; border-top: 1px solid #ddd;">
+                                    ${countryBreakdown}
+                                    <hr style="margin: 5px 0; border: none; border-top: 1px solid #ddd;">
+                                    <em>Click to see network view</em>
+                       
+                                    `)
+                                .style("left", (event.pageX + 10) + "px")
+                                .style("top", (event.pageY - 10) + "px");
+                        })
+                        .on("mouseout", function() {
+                            tooltip.style("opacity", 0);
+                        });
+
+                    // Calculate base grid for rectangles with padding
+                    const padding = rectWidth / 2 + 1;
+                    const availableWidth = cellW - 2 * padding;
+                    const rectsPerRowCalc = Math.max(1, Math.floor(availableWidth / rectSpacing));
+
+                    // Calculate starting position
+                    const startX = cellX + padding;
+                    const startY = cellY + padding;
+
+                    // Flatten all rectangles with their country info
+                    const allRects = [];
+                    d.countries.forEach(countryData => {
+                        for (let i = 0; i < countryData.numRects; i++) {
+                            allRects.push(countryData.country);
+                        }
+                    });
+
+                    // Shuffle rectangles for mixed appearance using seeded random
+                    for (let i = allRects.length - 1; i > 0; i--) {
+                        const j = Math.floor(seededRandom(dataIndex * 1000 + i) * (i + 1));
+                        [allRects[i], allRects[j]] = [allRects[j], allRects[i]];
+                    }
+
+                    // Draw all rectangles (static, no animation)
+                    allRects.forEach((country, i) => {
+                        const row = Math.floor(i / rectsPerRowCalc);
+                        const col = i % rectsPerRowCalc;
+
+                        const rectX = startX + col * rectSpacing;
+                        const rectY = startY + row * rectSpacing;
+
+                        // Ensure rectangles stay within cell bounds
+                        if (rectX + rectWidth <= cellX + cellW && rectY + rectHeight <= cellY + cellH) {
+                            cellGroup.append("rect")
+                                .attr("class", "country-rect")
+                                .attr("data-country", country)
+                                .attr("x", rectX)
+                                .attr("y", rectY)
+                                .attr("width", rectWidth)
+                                .attr("height", rectHeight)
+                                .attr("fill", colorScale(country))
+                                .attr("fill-opacity", 0.9);
+                        }
+                    });
+                }
+            });
+
+            // Draw single dotted vertical lines between months (centered in the gap)
+            const gridTop = yScale(years[0]);
+            const gridBottom = yScale(years[years.length - 1]) + yScale.bandwidth();
+            const gridLeft = xScale(months[0]);
+            const gridRight = xScale(months[months.length - 1]) + xScale.bandwidth();
+            for (let i = 1; i < months.length; i++) {
+                const prevRight = xScale(months[i - 1]) + xScale.bandwidth();
+                const nextLeft = xScale(months[i]);
+                const lineX = (prevRight + nextLeft) / 2;
+                svg.append("line")
+                    .attr("x1", lineX)
+                    .attr("y1", gridTop)
+                    .attr("x2", lineX)
+                    .attr("y2", gridBottom)
+                    .attr("stroke", "#ddd")
+                    .attr("stroke-width", 0.5)
+                    .attr("stroke-dasharray", "3,3");
+            }
+
+            // Draw single dotted horizontal lines between years (centered in the gap)
+            for (let i = 1; i < years.length; i++) {
+                const prevBottom = yScale(years[i - 1]) + yScale.bandwidth();
+                const nextTop = yScale(years[i]);
+                const lineY = (prevBottom + nextTop) / 2;
+                svg.append("line")
+                    .attr("x1", gridLeft)
+                    .attr("y1", lineY)
+                    .attr("x2", gridRight)
+                    .attr("y2", lineY)
+                    .attr("stroke", "#ddd")
+                    .attr("stroke-width", 0.5)
+                    .attr("stroke-dasharray", "3,3");
+            }
+
+            // Add X axis at the TOP
+            const xAxis = d3.axisTop(xScale)
+                .tickFormat(d => d.substring(0, 3)); // Abbreviate month names
+            svg.append("g")
+                .attr("transform", `translate(0, ${margin.top})`)
+                .call(xAxis)
+                .call(g => g.select(".domain").remove())  
+                .call(g => g.selectAll(".tick line").remove())
+                .selectAll("text")
+                .style("font-size", "px")
+                .style("font-family", "'Inconsolata', Monaco, monospace")
+
+            // Add X axis label
+            //svg.append("text")
+            //    .attr("x", (width - margin.right) / 2 + margin.left / 2)
+            //    .attr("y", margin.top - 50)
+            //    .attr("text-anchor", "middle")
+            //    .style("font-size", "10px")
+            //    .style("font-weight", "bold")
+            //    .style("font-family", "'Inconsolata', Monaco, monospace")
+            //    .text("Month");
+
+            // Add Y axis (left side)
+            const yAxis = d3.axisLeft(yScale);
+            svg.append("g")
+                .attr("transform", `translate(${margin.left}, 0)`)
+                .call(yAxis)
+                .call(g => g.select(".domain").remove())
+                .call(g => g.selectAll(".tick line").remove())
+                .selectAll("text")
+                .style("font-size", "9px")
+                .style("font-family", "'Inconsolata', Monaco, monospace");
+
+            // Add Y axis label
+          //  svg.append("text")
+         //       .attr("transform", "rotate(-90)")
+         //       .attr("x", -(height)/2)
+         //       .attr("y", margin.right - 70)
+         //       .attr("text-anchor", "middle")
+         //       .style("font-size", "10px")
+         //       .style("font-weight", "bold")
+         //       .style("font-family", "'Inconsolata', Monaco, monospace")
+         //       .text("Year");
+//
+            // === SIDEBAR LEGEND (grouped by continent) ===
+            const displayNames = {
+                "Venezuela (Bolivarian Republic of)": "Venezuela",
+                "Syrian Arab Republic": "Syria"
+            };
+
+            const continentGroups = [
+                { continent: "Asia", countries: ["Afghanistan", "Myanmar", "Syrian Arab Republic"] },
+                { continent: "Africa", countries: ["Ethiopia", "Algeria", "Morocco"] },
+                { continent: "America", countries: ["Venezuela (Bolivarian Republic of)", "Mexico"] }
+            ];
+
+            const sidebarLegend = d3.select("#sidebar-legend");
+
+            sidebarLegend.append("div")
+                .attr("class", "sidebar-legend-title")
+                .text("Countries of Origin");
+
+            sidebarLegend.append("div")
+                .attr("class", "sidebar-legend-subtitle")
+                .text("Click to select one or more countries");
+
+            continentGroups.forEach(group => {
+                const groupDiv = sidebarLegend.append("div")
+                    .attr("class", "continent-group");
+
+                // Continent label on the left
+                const label = groupDiv.append("div")
+                    .attr("class", "continent-label")
+                    .attr("data-continent", group.continent)
+                    .text(group.continent)
+                    .on("click", function() {
+                        const countriesInGroup = group.countries.filter(c => top10Countries.includes(c));
+                        const allSelected = countriesInGroup.every(c => selectedCountries.has(c));
+                        if (allSelected) {
+                            countriesInGroup.forEach(c => selectedCountries.delete(c));
+                        } else {
+                            countriesInGroup.forEach(c => selectedCountries.add(c));
+                        }
+                        updateCountryFilter();
+                    });
+
+                // Vertical connector line
+                groupDiv.append("div")
+                    .attr("class", "continent-connector");
+
+                // Countries column on the right
+                const countriesDiv = groupDiv.append("div")
+                    .attr("class", "continent-countries");
+
+                group.countries.forEach(country => {
+                    if (!top10Countries.includes(country)) return;
+                    const row = countriesDiv.append("div")
+                        .attr("class", "sidebar-country-row")
+                        .attr("data-country", country)
+                        .on("click", function() {
+                            if (selectedCountries.has(country)) {
+                                selectedCountries.delete(country);
+                            } else {
+                                selectedCountries.add(country);
+                            }
+                            updateCountryFilter();
+                        });
+
+                    row.append("div")
+                        .attr("class", "sidebar-color-box")
+                        .style("background-color", colorScale(country));
+
+                    const name = displayNames[country] || country;
+                    row.append("span").text(name);
+                });
+            });
+
+            // === INTERACTIVE COUNTRY FILTER ===
+            const selectedCountries = new Set();
+
+            function updateCountryFilter() {
+                const noFilter = selectedCountries.size === 0;
+
+                // Update grid rectangles
+                svg.selectAll(".country-rect").each(function() {
+                    const rect = d3.select(this);
+                    const country = rect.attr("data-country");
+                    if (noFilter || selectedCountries.has(country)) {
+                        rect.attr("fill", colorScale(country))
+                            .attr("fill-opacity", 0.9);
+                    } else {
+                        rect.attr("fill", "#ddd")
+                            .attr("fill-opacity", 0.3);
+                    }
+                });
+
+                // Update sidebar country rows
+                d3.selectAll(".sidebar-country-row").each(function() {
+                    const row = d3.select(this);
+                    const country = row.attr("data-country");
+                    if (noFilter || selectedCountries.has(country)) {
+                        row.style("opacity", 1);
+                    } else {
+                        row.style("opacity", 0.25);
+                    }
+                });
+
+                // Update continent headers
+                d3.selectAll(".continent-label").each(function() {
+                    const header = d3.select(this);
+                    const continent = header.attr("data-continent");
+                    const group = continentGroups.find(g => g.continent === continent);
+                    if (group) {
+                        const countriesInGroup = group.countries.filter(c => top10Countries.includes(c));
+                        const anySelected = countriesInGroup.some(c => selectedCountries.has(c));
+                        if (noFilter || anySelected) {
+                            header.style("opacity", 1);
+                        } else {
+                            header.style("opacity", 0.25);
+                        }
+                    }
+                });
+            }
+
+            // Add rectangle count note in sidebar
+            sidebarLegend.append("div")
+                .attr("class", "sidebar-note")
+                //.text("Each rectangle represents one missing migrant");
+
+            // Add reset selection button
+            sidebarLegend.append("button")
+                .attr("id", "reset-selection")
+                .text("Reset Selection")
+                .on("click", function() {
+                    // Reset country filters
+                    selectedCountries.clear();
+                    updateCountryFilter();
+
+                    // Reset area chart range slider
+                    rangeLeft = 0;
+                    rangeRight = areaW;
+                    updateRange();
+                });
+
+            // === NARRATIVE INTRO  ===
+
+            const narrativeTexts = [
+                "Every year, hundreds and sometimes thousands of people attempting to migrate go missing.\n\nMigrants that are lost in translation between dangerous migration routes, bordeers, policies and legal systems that fail to protect them.",
+                "As the global trend of missing migrants increases, it becomes paramount to document and communicate the magnitude of this issue, so to honor the memory of those who vanished and take a first step towards creating a more accountable migration system."
+            ];
+
+            // --- Typewriter with skip support ---
+            let typewriterSkip = false;   // set true to instantly complete
+            let typewriterDone = false;   // true once full text is rendered
+
+            function typewriterEffect(element, text, speed = 35) {
+                return new Promise(resolve => {
+                    typewriterSkip = false;
+                    typewriterDone = false;
+                    let i = 0;
+                    element.innerHTML = '<span class="cursor"></span>';
+
+                    function renderRemaining() {
+                        // Instantly dump all remaining characters
+                        const cursor = element.querySelector('.cursor');
+                        if (!cursor) return;
+                        const remaining = text.slice(i);
+                        remaining.split('').forEach(ch => {
+                            if (ch === '\n') {
+                                cursor.insertAdjacentHTML('beforebegin', '<br>');
+                            } else if (ch === '□') {
+                                cursor.insertAdjacentHTML('beforebegin', '<span class="legend-inline-square"></span>');
+                            } else {
+                                cursor.insertAdjacentText('beforebegin', ch);
+                            }
+                        });
+                        i = text.length;
+                    }
+
+                    function type() {
+                        if (typewriterSkip) {
+                            renderRemaining();
+                            typewriterDone = true;
+                            resolve();
+                            return;
+                        }
+                        if (i < text.length) {
+                            const cursor = element.querySelector('.cursor');
+                            if (text[i] === '\n') {
+                                cursor.insertAdjacentHTML('beforebegin', '<br>');
+                            } else if (text[i] === '□') {
+                                cursor.insertAdjacentHTML('beforebegin', '<span class="legend-inline-square"></span>');
+                            } else {
+                                cursor.insertAdjacentText('beforebegin', text[i]);
+                            }
+                            i++;
+                            setTimeout(type, speed);
+                        } else {
+                            typewriterDone = true;
+                            resolve();
+                        }
+                    }
+                    type();
+                });
+            }
+
+            function fadeOut(el) {
+                return new Promise(resolve => {
+                    el.classList.add('hidden');
+                    setTimeout(resolve, 800);
+                });
+            }
+
+            // --- Floating squares ---
+            const squareColors = ["#FF0000", "#F36B6B", "#FFADAD", "#0000FD", "#8585FF", "#00FFF0", "#5EE87E", "#1b5e20"];
+            let particleInterval = null;
+            const particlesContainer = document.getElementById('narrative-particles');
+
+            function getRandomSafePosition() {
+                const vw = window.innerWidth;
+                const vh = window.innerHeight;
+                const pad = 40;
+
+                // Exclusion zone: the central content area
+                
+                const exLeft = vw * 0.12;
+                const exRight = Math.min(vw * 0.88, exLeft + 780);
+                const exTop = vh * 0.28;
+                const exBottom = vh * 0.72;
+
+                // Build list of safe zones around the exclusion area
+                const zones = [];
+                // Top strip (full width)
+                if (exTop > pad * 2) {
+                    zones.push({ x0: pad, x1: vw - pad, y0: pad, y1: exTop - pad });
+                }
+                // Bottom strip (full width)
+                if (vh - exBottom > pad * 2) {
+                    zones.push({ x0: pad, x1: vw - pad, y0: exBottom + pad, y1: vh - pad });
+                }
+                // Left strip (beside text, vertically between top and bottom)
+                if (exLeft > pad * 2) {
+                    zones.push({ x0: pad, x1: exLeft - pad, y0: pad, y1: vh - pad });
+                }
+                // Right strip (beside text)
+                if (vw - exRight > pad * 2) {
+                    zones.push({ x0: exRight + pad, x1: vw - pad, y0: pad, y1: vh - pad });
+                }
+
+                // Fallback: corners
+                if (zones.length === 0) {
+                    zones.push({ x0: pad, x1: pad + 60, y0: pad, y1: pad + 60 });
+                    zones.push({ x0: vw - 60 - pad, x1: vw - pad, y0: vh - 60 - pad, y1: vh - pad });
+                }
+
+                const zone = zones[Math.floor(Math.random() * zones.length)];
+                return {
+                    x: zone.x0 + Math.random() * (zone.x1 - zone.x0),
+                    y: zone.y0 + Math.random() * (zone.y1 - zone.y0)
+                };
+            }
+
+            function spawnSquare() {
+                const pos = getRandomSafePosition();
+                const color = squareColors[Math.floor(Math.random() * squareColors.length)];
+                const sq = document.createElement('div');
+                sq.className = 'narrative-square';
+                sq.style.left = pos.x + 'px';
+                sq.style.top = pos.y + 'px';
+                sq.style.backgroundColor = color;
+                particlesContainer.appendChild(sq);
+
+                // Fade in on next frame
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        sq.classList.add('visible');
+                    });
+                });
+
+                // Fade out and remove after a random duration
+                const lifespan = 2000 + Math.random() * 3000;
+                setTimeout(() => {
+                    sq.classList.remove('visible');
+                    setTimeout(() => {
+                        if (sq.parentNode) sq.parentNode.removeChild(sq);
+                    }, 1200);
+                }, lifespan);
+            }
+
+            function startParticles() {
+                if (particleInterval) return;
+                // Spawn a few immediately with stagger
+                for (let i = 0; i < 5; i++) {
+                    setTimeout(() => spawnSquare(), i * 200);
+                }
+                // Then keep spawning
+                particleInterval = setInterval(() => {
+                    if (particlesContainer.children.length < 8) {
+                        spawnSquare();
+                    }
+                }, 700);
+            }
+
+            function stopParticles() {
+                if (particleInterval) {
+                    clearInterval(particleInterval);
+                    particleInterval = null;
+                }
+                // Fade out remaining squares
+                const squares = particlesContainer.querySelectorAll('.narrative-square');
+                squares.forEach(sq => {
+                    sq.classList.remove('visible');
+                    setTimeout(() => {
+                        if (sq.parentNode) sq.parentNode.removeChild(sq);
+                    }, 1200);
+                });
+            }
+
+            // Start particles immediately (visible on intro screen)
+            startParticles();
+
+            async function revealVisualization() {
+                // 1. Grid first
+                document.getElementById('chart-container').classList.add('visible');
+                await new Promise(r => setTimeout(r, 1000));
+
+                // 2. Area chart
+                document.getElementById('left-header').classList.add('visible');
+                await new Promise(r => setTimeout(r, 800));
+
+                // 3. Countries of origin
+                document.getElementById('sidebar-trend').classList.add('visible');
+                await new Promise(r => setTimeout(r, 800));
+
+                // 4. Title and subtitle
+                document.getElementById('sidebar-origin').classList.add('visible');
+            }
+
+            // --- Intro screen: keyboard navigation ---
+            const introOptions = document.querySelectorAll('.intro-option');
+            let selectedIdx = 0;  // 0 = narrative, 1 = skip
+            let introActive = true;
+
+            function updateIntroSelection() {
+                introOptions.forEach((opt, i) => {
+                    opt.classList.toggle('selected', i === selectedIdx);
+                });
+            }
+
+            // Mouse hover selects
+            introOptions.forEach((opt, i) => {
+                opt.addEventListener('mouseenter', () => {
+                    selectedIdx = i;
+                    updateIntroSelection();
+                });
+            });
+
+            // --- Narrative state machine ---
+            // States: 'intro' | 'typing-0' | 'waiting-0' | 'typing-1' | 'waiting-1' | 'legend-typing' | 'legend-waiting' | 'viz' | 'done'
+            let narrativeState = 'intro';
+            let narrativeNextPrompt = document.getElementById('narrative-next');
+            let legendNextPrompt = document.getElementById('legend-next');
+
+            function showNextPrompt() {
+                narrativeNextPrompt.classList.add('show');
+            }
+            function hideNextPrompt() {
+                narrativeNextPrompt.classList.remove('show');
+            }
+            function showLegendPrompt() {
+                legendNextPrompt.classList.add('show');
+            }
+            function hideLegendPrompt() {
+                legendNextPrompt.classList.remove('show');
+            }
+
+            async function runNarrative() {
+                if (narrativeState !== 'intro') return;
+                introActive = false;
+
+                const introOverlay = document.getElementById('intro-overlay');
+                const narrativeOverlay = document.getElementById('narrative-overlay');
+                const narrativeTextEl = document.getElementById('narrative-text');
+
+                // Fade out intro
+                await fadeOut(introOverlay);
+                introOverlay.style.display = 'none';
+
+                // Show narrative overlay
+                narrativeOverlay.style.display = 'flex';
+                narrativeOverlay.style.opacity = '1';
+
+                // --- Text 1 ---
+                narrativeState = 'typing-0';
+                await typewriterEffect(narrativeTextEl, narrativeTexts[0], 35);
+                narrativeState = 'waiting-0';
+                showNextPrompt();
+                // Wait for Enter key (handled in keydown listener)
+            }
+
+            async function advanceFromWait0() {
+                hideNextPrompt();
+                const narrativeOverlay = document.getElementById('narrative-overlay');
+                const narrativeTextEl = document.getElementById('narrative-text');
+
+                // Fade out, then type text 2
+                narrativeOverlay.style.opacity = '0';
+                await new Promise(r => setTimeout(r, 800));
+                narrativeTextEl.innerHTML = '';
+                narrativeOverlay.style.opacity = '1';
+
+                narrativeState = 'typing-1';
+                await typewriterEffect(narrativeTextEl, narrativeTexts[1], 35);
+                narrativeState = 'waiting-1';
+                showNextPrompt();
+                // Wait for Enter key
+            }
+            
+
+            async function advanceFromWait1() {
+                hideNextPrompt();
+                stopParticles();
+                const narrativeOverlay = document.getElementById('narrative-overlay');
+                const legendOverlay = document.getElementById('legend-overlay');
+
+                // Fade out narrative
+                await fadeOut(narrativeOverlay);
+                narrativeOverlay.style.display = 'none';
+
+                // Show legend screen
+                legendOverlay.style.display = 'flex';
+                legendOverlay.style.opacity = '1';
+                await runLegendSequence();
+            }
+
+            async function advanceFromLegend() {
+                hideLegendPrompt();
+                const legendOverlay = document.getElementById('legend-overlay');
+
+                await fadeOut(legendOverlay);
+                legendOverlay.style.display = 'none';
+
+                narrativeState = 'viz';
+                await revealVisualization();
+                narrativeState = 'done';
+            }
+
+            async function runLegendSequence() {
+                const legendTextEl = document.getElementById('legend-text');
+                legendTextEl.innerHTML = '';
+
+                narrativeState = 'legend-typing';
+                await typewriterEffect(legendTextEl, 'Each □ = one missing migrant', 35);
+                narrativeState = 'legend-waiting';
+                showLegendPrompt();
+            }
+
+            async function skipToViz() {
+                if (narrativeState !== 'intro') return;
+                introActive = false;
+                stopParticles();
+
+                const introOverlay = document.getElementById('intro-overlay');
+                await fadeOut(introOverlay);
+                introOverlay.style.display = 'none';
+                narrativeState = 'viz';
+                await revealVisualization();
+                narrativeState = 'done';
+            }
+
+            // --- Global keyboard handler ---
+            document.addEventListener('keydown', function(e) {
+                // Intro screen
+                if (narrativeState === 'intro' && introActive) {
+                    if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                        e.preventDefault();
+                        selectedIdx = 0;
+                        updateIntroSelection();
+                    } else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+                        e.preventDefault();
+                        selectedIdx = 1;
+                        updateIntroSelection();
+                    } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (selectedIdx === 0) {
+                            runNarrative();
+                        } else {
+                            skipToViz();
+                        }
+                    }
+                    return;
+                }
+
+                // Narrative screens: Enter key
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (narrativeState === 'typing-0' || narrativeState === 'typing-1' || narrativeState === 'legend-typing') {
+                        // Skip typewriter — complete text instantly
+                        typewriterSkip = true;
+                    } else if (narrativeState === 'waiting-0') {
+                        advanceFromWait0();
+                    } else if (narrativeState === 'waiting-1') {
+                        advanceFromWait1();
+                    } else if (narrativeState === 'legend-waiting') {
+                        advanceFromLegend();
+                    }
+                }
+            });
+
+            // Click handlers 
+            document.getElementById('btn-narrative').addEventListener('click', runNarrative);
+            document.getElementById('btn-skip').addEventListener('click', skipToViz);
+
+        });
+    </script>
+</body>
+</html>
